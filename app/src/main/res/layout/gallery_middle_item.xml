@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_marginLeft="1dp"
+    android:layout_marginTop="1dp"
+    android:orientation="horizontal"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent">
+
+    <RelativeLayout
+        android:layout_weight="1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <com.facebook.drawee.view.SimpleDraweeView
+            android:layout_marginRight="1dp"
+            android:id="@+id/gallery_image_view_1"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:scaleType="fitXY">
+        </com.facebook.drawee.view.SimpleDraweeView>
+
+        <ys.catcard.view.AnimatedCheckBox
+            android:id="@+id/gallery_image_view_1_checkbox"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_alignTop="@+id/gallery_image_view_1"
+            android:layout_alignRight="@+id/gallery_image_view_1" />
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:layout_weight="1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <com.facebook.drawee.view.SimpleDraweeView
+            android:layout_marginRight="1dp"
+            android:id="@+id/gallery_image_view_2"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:scaleType="fitXY" />
+
+        <ys.catcard.view.AnimatedCheckBox
+            android:id="@+id/gallery_image_view_2_checkbox"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_alignTop="@+id/gallery_image_view_2"
+            android:layout_alignRight="@+id/gallery_image_view_2" />
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:layout_weight="1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <com.facebook.drawee.view.SimpleDraweeView
+            android:layout_marginRight="1dp"
+            android:id="@+id/gallery_image_view_3"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:scaleType="fitXY" />
+
+        <ys.catcard.view.AnimatedCheckBox
+            android:id="@+id/gallery_image_view_3_checkbox"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_alignTop="@+id/gallery_image_view_3"
+            android:layout_alignRight="@+id/gallery_image_view_3" />
+    </RelativeLayout>
+
+</LinearLayout>
