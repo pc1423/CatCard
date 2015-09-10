@@ -113,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
     }
 
+    //fetch image urls from api
     private void fetchImageUrls(final List<ImageSource> imageSourceList, final Category category) {
         new Thread(new Runnable() {
             @Override
