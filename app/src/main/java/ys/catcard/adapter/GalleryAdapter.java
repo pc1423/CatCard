@@ -1,11 +1,14 @@
 package ys.catcard.adapter;
 
+import android.content.ContentResolver;
+import android.content.res.Resources;
 import android.net.Uri;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.facebook.common.util.UriUtil;
 import com.facebook.drawee.backends.pipeline.Fresco;
 import com.facebook.drawee.interfaces.DraweeController;
 import com.facebook.drawee.view.SimpleDraweeView;
@@ -23,6 +26,8 @@ import ys.catcard.view.AnimatedCheckBox;
  * 정사각형의 ImageView 로 구성된 콜라주 GalleryAdapter
  */
 public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryViewHolder> {
+
+    public static final String RANDOM = "random";
 
     private List<ImageSource> imageSources = new ArrayList<ImageSource>();
     private ImageSource selectedItem;
@@ -45,6 +50,11 @@ public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryV
         }
     }
 
+    public void setSelection(int index) {
+        selectedItem = imageSources.get(index);
+        notifyDataSetChanged();
+    }
+
     private void setProgressImageRequest(SimpleDraweeView simpleDraweeView, String url) {
         ImageRequest request = ImageRequestBuilder.newBuilderWithSource(Uri.parse(url))
                 .setProgressiveRenderingEnabled(true)
@@ -60,9 +70,9 @@ public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryV
     public void onBindViewHolder(final GalleryViewHolder viewHolder, int position) {
         final int index = position * 3;
 
-        setProgressImageRequest(viewHolder.bigImageView, imageSources.get(index).getUrl());
-        setProgressImageRequest(viewHolder.smallImageView1, imageSources.get(index + 1).getUrl());
-        setProgressImageRequest(viewHolder.smallImageView2, imageSources.get(index + 2).getUrl());
+        setImage(viewHolder.bigImageView, index);
+        setImage(viewHolder.smallImageView1, index + 1);
+        setImage(viewHolder.smallImageView2, index + 2);
 
         viewHolder.bigCheckBox.setChecked(imageSources.get(index).equals(selectedItem));
         viewHolder.smallCheckBox1.setChecked(imageSources.get(index + 1).equals(selectedItem));
@@ -97,6 +107,19 @@ public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryV
                 }
             }
         });
+    }
+
+    private void setImage(SimpleDraweeView imageView, int index) {
+        if (RANDOM.equals(imageSources.get(index).getId())) {
+            Uri uri = new Uri.Builder()
+                    .scheme(UriUtil.LOCAL_RESOURCE_SCHEME) // "res"
+                    .path(String.valueOf(R.drawable.random))
+                    .build();
+
+            imageView.setImageURI(uri);
+        } else {
+            setProgressImageRequest(imageView, imageSources.get(index).getUrl());
+        }
     }
 
     @Override

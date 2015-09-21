@@ -41,7 +41,8 @@ import ys.catcard.model.Size;
 
 public class MainActivity extends AppCompatActivity {
 
-    public static final String GET_IMAGE_URL = "http://thecatapi.com/api/images/get?format=xml&size=small&type=jpg,png&results_per_page=30";
+    public static final String GET_IMAGE_LIST_URL = "http://thecatapi.com/api/images/get?format=xml&size=small&type=jpg,png&results_per_page=29";
+    public static final String GET_IMAGE_URL = "http://thecatapi.com/api/images/get?format=xml&size=small&type=jpg,png&results_per_page=1";
 
     private RecyclerView mRecyclerView;
     private RecyclerView.LayoutManager mLayoutManager;
@@ -53,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText mEditTextMessage;
 
     private List<ImageSource> imageUrls = new ArrayList<ImageSource>();
-
+    private Category selectedCategory = Category.RANDOM;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 Category category = (Category) mCategorySpinnerAdapter.getItem(position);
+                selectedCategory = category;
                 fetchImageUrls(imageUrls, category);
             }
 
@@ -96,7 +98,12 @@ public class MainActivity extends AppCompatActivity {
                     public void run() {
                         try {
                             ImageSource selectedSource = mGalleryAdapter.getSelectedItem();
-                            send(getApplicationContext(), mEditTextMessage.getText().toString(), getResources().getString(R.string.zoom), selectedSource);
+
+                            if (GalleryAdapter.RANDOM.equals(selectedSource.getId())) {
+                                fetchImageUrlAndSend(selectedCategory);
+                            } else {
+                                send(getApplicationContext(), mEditTextMessage.getText().toString(), getResources().getString(R.string.zoom), selectedSource);
+                            }
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
@@ -113,6 +120,27 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
     }
 
+    private void fetchImageUrlAndSend(final Category category) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                URL url;
+                try {
+                    if (Category.RANDOM == category) {
+                        url = new URL(GET_IMAGE_URL);
+                    } else {
+                        url = new URL(GET_IMAGE_URL + "&category=" + category.name());
+                    }
+
+                    List<ImageSource> imageSources = getRandomImageSources(url);
+                    send(getApplicationContext(), mEditTextMessage.getText().toString(), getResources().getString(R.string.zoom), imageSources.get(0));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
     //fetch image urls from api
     private void fetchImageUrls(final List<ImageSource> imageSourceList, final Category category) {
         new Thread(new Runnable() {
@@ -121,18 +149,20 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     URL url;
                     if (Category.RANDOM == category) {
-                        url = new URL(GET_IMAGE_URL);
+                        url = new URL(GET_IMAGE_LIST_URL);
                     } else {
-                        url = new URL(GET_IMAGE_URL + "&category=" + category.name());
+                        url = new URL(GET_IMAGE_LIST_URL + "&category=" + category.name());
                     }
 
                     List<ImageSource> imageSources = getRandomImageSources(url);
                     imageSourceList.clear();
+                    imageSourceList.add(new ImageSource("random", "random"));
                     imageSourceList.addAll(imageSources);
 
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
+                            mGalleryAdapter.setSelection(0);
                             mGalleryAdapter.notifyDataSetChanged();
                         }
                     });
