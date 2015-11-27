@@ -7,4 +7,8 @@
     <string name="send">전송</string>
     <string name="message">메시지</string>
     <string name="zoom">크게 보기</string>
+    <string name="downloading">Downloading...</string>
+    <string name="fetch_link">Fetch image link..</string>
+    <string name="get_image_size">Get image size...</string>
+    <string name="send_ok">Send!</string>
 </resources>

@@ -1,7 +1,5 @@
 package ys.catcard.adapter;
 
-import android.content.ContentResolver;
-import android.content.res.Resources;
 import android.net.Uri;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -19,39 +17,40 @@ import java.util.ArrayList;
 import java.util.List;
 
 import ys.catcard.R;
-import ys.catcard.model.ImageSource;
+import ys.catcard.model.Image;
+import ys.catcard.model.listener.ImageLongClickListener;
 import ys.catcard.view.AnimatedCheckBox;
 
-/**
- * 정사각형의 ImageView 로 구성된 콜라주 GalleryAdapter
- */
 public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryViewHolder> {
 
     public static final String RANDOM = "random";
 
-    private List<ImageSource> imageSources = new ArrayList<ImageSource>();
-    private ImageSource selectedItem;
+    private List<Image> images = new ArrayList<Image>();
+    private Image selectedItem;
 
-    public GalleryAdapter(List<ImageSource> imageSources) {
-        this.imageSources = imageSources;
+    private ImageLongClickListener longClickListener;
+
+    public GalleryAdapter(List<Image> images, ImageLongClickListener longClickListener) {
+        this.images = images;
+        this.longClickListener = longClickListener;
     }
 
     @Override
     public GalleryViewHolder onCreateViewHolder(ViewGroup viewGroup, int viewType) {
         switch (viewType) {
             case 0 :
-                return new GalleryViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.gallery_left_item, viewGroup, false), viewType);
+                return new GalleryViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.gallery_left_item, viewGroup, false));
             case 1 :
-                return new GalleryViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.gallery_middle_item, viewGroup, false), viewType);
+                return new GalleryViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.gallery_middle_item, viewGroup, false));
             case 2 :
-                return new GalleryViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.gallery_right_item, viewGroup, false), viewType);
+                return new GalleryViewHolder(LayoutInflater.from(viewGroup.getContext()).inflate(R.layout.gallery_right_item, viewGroup, false));
             default:
                 return null;
         }
     }
 
     public void setSelection(int index) {
-        selectedItem = imageSources.get(index);
+        selectedItem = images.get(index);
         notifyDataSetChanged();
     }
 
@@ -66,6 +65,43 @@ public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryV
         simpleDraweeView.setController(controller);
     }
 
+    private void setCheckBoxProperties(SimpleDraweeView draweeView, final AnimatedCheckBox checkBox, final int index) {
+
+        try {
+            draweeView.setVisibility(View.VISIBLE);
+            checkBox.setVisibility(View.VISIBLE);
+            checkBox.setChecked(images.get(index).equals(selectedItem));
+            draweeView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    checkBox.performClick();
+                }
+            });
+
+            checkBox.setOnCheckedChangeListener(new AnimatedCheckBox.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(View buttonView, boolean isChecked) {
+                    if (isChecked) {
+                        selectedItem = images.get(index);
+                        notifyDataSetChanged();
+                    }
+                }
+            });
+
+            draweeView.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    longClickListener.onLongClick(images.get(index));
+                    return false;
+                }
+            });
+        } catch (IndexOutOfBoundsException e) {
+            draweeView.setVisibility(View.INVISIBLE);
+            checkBox.setVisibility(View.INVISIBLE);
+        }
+
+    }
+
     @Override
     public void onBindViewHolder(final GalleryViewHolder viewHolder, int position) {
         final int index = position * 3;
@@ -74,51 +110,27 @@ public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryV
         setImage(viewHolder.smallImageView1, index + 1);
         setImage(viewHolder.smallImageView2, index + 2);
 
-        viewHolder.bigCheckBox.setChecked(imageSources.get(index).equals(selectedItem));
-        viewHolder.smallCheckBox1.setChecked(imageSources.get(index + 1).equals(selectedItem));
-        viewHolder.smallCheckBox2.setChecked(imageSources.get(index + 2).equals(selectedItem));
+        setCheckBoxProperties(viewHolder.bigImageView, viewHolder.bigCheckBox, index);
+        setCheckBoxProperties(viewHolder.smallImageView1, viewHolder.smallCheckBox1, index + 1);
+        setCheckBoxProperties(viewHolder.smallImageView2, viewHolder.smallCheckBox2, index + 2);
 
-        viewHolder.bigCheckBox.setOnCheckedChangeListener(new AnimatedCheckBox.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(View buttonView, boolean isChecked) {
-                if (isChecked) {
-                    selectedItem = imageSources.get(index);
-                    notifyDataSetChanged();
-                }
-            }
-        });
-
-        viewHolder.smallCheckBox1.setOnCheckedChangeListener(new AnimatedCheckBox.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(View buttonView, boolean isChecked) {
-                if (isChecked) {
-                    selectedItem = imageSources.get(index + 1);
-                    notifyDataSetChanged();
-                }
-            }
-        });
-
-        viewHolder.smallCheckBox2.setOnCheckedChangeListener(new AnimatedCheckBox.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(View buttonView, boolean isChecked) {
-                if (isChecked) {
-                    selectedItem = imageSources.get(index + 2);
-                    notifyDataSetChanged();
-                }
-            }
-        });
     }
 
     private void setImage(SimpleDraweeView imageView, int index) {
-        if (RANDOM.equals(imageSources.get(index).getId())) {
-            Uri uri = new Uri.Builder()
-                    .scheme(UriUtil.LOCAL_RESOURCE_SCHEME) // "res"
-                    .path(String.valueOf(R.drawable.random))
-                    .build();
+        try {
+            imageView.setVisibility(View.VISIBLE);
+            if (RANDOM.equals(images.get(index).getId())) {
+                Uri uri = new Uri.Builder()
+                        .scheme(UriUtil.LOCAL_RESOURCE_SCHEME) // "res"
+                        .path(String.valueOf(R.drawable.random))
+                        .build();
 
-            imageView.setImageURI(uri);
-        } else {
-            setProgressImageRequest(imageView, imageSources.get(index).getUrl());
+                imageView.setImageURI(uri);
+            } else {
+                setProgressImageRequest(imageView, images.get(index).getUrl());
+            }
+        } catch (IndexOutOfBoundsException e) {
+            imageView.setVisibility(View.INVISIBLE);
         }
     }
 
@@ -129,10 +141,10 @@ public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryV
 
     @Override
     public int getItemCount() {
-        return (int) Math.ceil((double) imageSources.size() / 3);
+        return (int) Math.ceil((double) images.size() / 3);
     }
 
-    public ImageSource getSelectedItem() {
+    public Image getSelectedItem() {
         return selectedItem;
     }
 
@@ -147,37 +159,16 @@ public class GalleryAdapter extends RecyclerView.Adapter<GalleryAdapter.GalleryV
         private AnimatedCheckBox smallCheckBox1;
         private AnimatedCheckBox smallCheckBox2;
 
-        public GalleryViewHolder(final View itemView, int viewType) {
+        public GalleryViewHolder(final View itemView) {
             super(itemView);
-            switch (viewType) {
-                case 0 :
-                    bigImageView = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_left);
-                    smallImageView1 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_right1);
-                    smallImageView2 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_right2);
 
-                    bigCheckBox = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_left_checkbox);
-                    smallCheckBox1 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_right1_checkbox);
-                    smallCheckBox2 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_right2_checkbox);
-                    break;
-                case 1 :
-                    bigImageView = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_1);
-                    smallImageView1 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_2);
-                    smallImageView2 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_3);
+            bigImageView = (SimpleDraweeView) itemView.findViewById(R.id.gallery_item_big).findViewById(R.id.gallery_item_each_drawee);
+            smallImageView1 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_item_small1).findViewById(R.id.gallery_item_each_drawee);
+            smallImageView2 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_item_small2).findViewById(R.id.gallery_item_each_drawee);
 
-                    bigCheckBox = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_1_checkbox);
-                    smallCheckBox1 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_2_checkbox);
-                    smallCheckBox2 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_3_checkbox);
-                    break;
-                case 2 :
-                    bigImageView = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_right);
-                    smallImageView1 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_left1);
-                    smallImageView2 = (SimpleDraweeView) itemView.findViewById(R.id.gallery_image_view_left2);
-
-                    bigCheckBox = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_right_checkbox);
-                    smallCheckBox1 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_left1_checkbox);
-                    smallCheckBox2 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_image_view_left2_checkbox);
-                    break;
-            }
+            bigCheckBox = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_item_big).findViewById(R.id.gallery_item_each_checkbox);
+            smallCheckBox1 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_item_small1).findViewById(R.id.gallery_item_each_checkbox);
+            smallCheckBox2 = (AnimatedCheckBox) itemView.findViewById(R.id.gallery_item_small2).findViewById(R.id.gallery_item_each_checkbox);
 
             /**
              *  가중치가 가장 높은 ImageView 의 width 와 동일하게 height 를 설정한다.

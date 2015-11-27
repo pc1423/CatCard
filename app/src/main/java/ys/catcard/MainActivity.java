@@ -1,274 +1,175 @@
 package ys.catcard;
 
 import android.content.Context;
-import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
+import android.os.Vibrator;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentPagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.DefaultItemAnimator;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.Spinner;
-import android.widget.SpinnerAdapter;
+import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Toast;
 
-import com.kakao.kakaolink.KakaoLink;
-import com.kakao.kakaolink.KakaoTalkLinkMessageBuilder;
-import com.kakao.util.KakaoParameterException;
+import com.astuetz.PagerSlidingTabStrip;
 
-import org.w3c.dom.Document;
-import org.w3c.dom.NodeList;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-
+import retrofit.Callback;
+import retrofit.RetrofitError;
+import retrofit.client.Response;
 import ys.catcard.adapter.GalleryAdapter;
-import ys.catcard.model.Category;
-import ys.catcard.model.ImageSource;
-import ys.catcard.model.Size;
+import ys.catcard.annotation.UiThread;
+import ys.catcard.api.ApiFactory;
+import ys.catcard.api.virtual.CatApi;
+import ys.catcard.api.virtual.CatApi.Category;
+import ys.catcard.helper.KakaoLinker;
+import ys.catcard.model.CatApiResponse;
+import ys.catcard.model.Image;
+import ys.catcard.model.dao.ImageDao;
+import ys.catcard.model.listener.ProgressChangeListener;
+import ys.catcard.view.ProgressDialog;
 
 public class MainActivity extends AppCompatActivity {
 
-    public static final String GET_IMAGE_LIST_URL = "http://thecatapi.com/api/images/get?format=xml&size=small&type=jpg,png&results_per_page=29";
-    public static final String GET_IMAGE_URL = "http://thecatapi.com/api/images/get?format=xml&size=small&type=jpg,png&results_per_page=1";
+    private ProgressDialog progressDialog;
+    private ProgressChangeListener progressChangeListener = new ProgressChangeListener() {
+        @UiThread
+        public void onProgressChanged(final int totalAmount, final int progress) {
+            Log.v("progress", progress + "/" + totalAmount);
+            progressDialog.getTextView().setText(String.valueOf((int) (((double) progress / (double) totalAmount) * 100)) + "%");
+        }
 
-    private RecyclerView mRecyclerView;
-    private RecyclerView.LayoutManager mLayoutManager;
-    private GalleryAdapter mGalleryAdapter;
-    private Spinner mCategorySpinner;
-    private SpinnerAdapter mCategorySpinnerAdapter;
+        @UiThread
+        public void onPreExecute() {
+            progressDialog.show(MainActivity.this);
+        }
 
-    private Button mBtnSend;
-    private EditText mEditTextMessage;
-
-    private List<ImageSource> imageUrls = new ArrayList<ImageSource>();
-    private Category selectedCategory = Category.RANDOM;
+        @UiThread
+        public void onPostExecute() {
+            progressDialog.dismiss();
+        }
+    };
+    private ViewPager sectionPager;
+    private PagerAdapter sectionAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        initUI();
+
+        progressDialog = ProgressDialog.create(this);
+
+        sectionPager = (ViewPager) findViewById(R.id.pager);
+        sectionAdapter = new PagerAdapter(getSupportFragmentManager(), new CatCardFragment(), new FavoriteCardFragment());
+
+        sectionPager.setAdapter(sectionAdapter);
+        ((PagerSlidingTabStrip) findViewById(R.id.tabs)).setViewPager(sectionPager);
     }
 
-    private void initUI() {
-        fetchImageUrls(imageUrls, Category.RANDOM);
+    public void processFavoriteImage(Image image) {
+        if (GalleryAdapter.RANDOM.equals(image.getId())) {
+            return;
+        }
 
-        mRecyclerView = (RecyclerView) findViewById(R.id.gallery_recycler_view);
-        mLayoutManager = new LinearLayoutManager(this);
-        mGalleryAdapter = new GalleryAdapter(imageUrls);
-        mRecyclerView.setLayoutManager(mLayoutManager);
-        mRecyclerView.setAdapter(mGalleryAdapter);
-        mRecyclerView.setItemAnimator(new DefaultItemAnimator());
+        if (ImageDao.insertImage(image)) {
+            Toast.makeText(getApplicationContext(), "추가 되었습니다.", Toast.LENGTH_SHORT).show();
+        } else {
+            ImageDao.deleteImage(image);
+            Toast.makeText(getApplicationContext(), "삭제 되었습니다.", Toast.LENGTH_SHORT).show();
+        }
 
-        mCategorySpinnerAdapter = new ArrayAdapter<Category>(getApplicationContext(), R.layout.spinner_item, Category.values());
-        mCategorySpinner = (Spinner) findViewById(R.id.spinner_category);
-        mCategorySpinner.setAdapter(mCategorySpinnerAdapter);
-        mCategorySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                Category category = (Category) mCategorySpinnerAdapter.getItem(position);
-                selectedCategory = category;
-                fetchImageUrls(imageUrls, category);
-            }
+        ((Vibrator) getSystemService(Context.VIBRATOR_SERVICE)).vibrate(50);
 
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-            }
-        });
-
-        mBtnSend = (Button) findViewById(R.id.btn_send);
-        mBtnSend.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            ImageSource selectedSource = mGalleryAdapter.getSelectedItem();
-
-                            if (GalleryAdapter.RANDOM.equals(selectedSource.getId())) {
-                                fetchImageUrlAndSend(selectedCategory);
-                            } else {
-                                send(getApplicationContext(), mEditTextMessage.getText().toString(), getResources().getString(R.string.zoom), selectedSource);
-                            }
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }).start();
-            }
-        });
-
-        mEditTextMessage = (EditText) findViewById(R.id.edittext_message);
+        sectionAdapter.getFavoriteCardFragment().onDataSetChanged();
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-    }
+    public void sendCatCard(Category selectedCategory, Image selectedSource, final String message, final String btnText) {
+        progressDialog.show(MainActivity.this);
+        hideKeyboard();
 
-    private void fetchImageUrlAndSend(final Category category) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                URL url;
-                try {
-                    if (Category.RANDOM == category) {
-                        url = new URL(GET_IMAGE_URL);
-                    } else {
-                        url = new URL(GET_IMAGE_URL + "&category=" + category.name());
-                    }
-
-                    List<ImageSource> imageSources = getRandomImageSources(url);
-                    send(getApplicationContext(), mEditTextMessage.getText().toString(), getResources().getString(R.string.zoom), imageSources.get(0));
-                } catch (IOException e) {
-                    e.printStackTrace();
+        if (GalleryAdapter.RANDOM.equals(selectedSource.getId())) {
+            Callback<CatApiResponse> callBack = new Callback<CatApiResponse>() {
+                @UiThread
+                public void success(CatApiResponse catApiResponse, Response response) {
+                    KakaoLinker.sendImageSourceMessage(MainActivity.this, message, btnText, catApiResponse.getImageList().get(0), progressChangeListener);
                 }
-            }
-        }).start();
-    }
 
-    //fetch image urls from api
-    private void fetchImageUrls(final List<ImageSource> imageSourceList, final Category category) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    URL url;
-                    if (Category.RANDOM == category) {
-                        url = new URL(GET_IMAGE_LIST_URL);
-                    } else {
-                        url = new URL(GET_IMAGE_LIST_URL + "&category=" + category.name());
-                    }
-
-                    List<ImageSource> imageSources = getRandomImageSources(url);
-                    imageSourceList.clear();
-                    imageSourceList.add(new ImageSource("random", "random"));
-                    imageSourceList.addAll(imageSources);
-
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            mGalleryAdapter.setSelection(0);
-                            mGalleryAdapter.notifyDataSetChanged();
-                        }
-                    });
-                } catch (IOException e) {
-                    e.printStackTrace();
+                @UiThread
+                public void failure(RetrofitError error) {
+                    progressDialog.dismiss();
                 }
+            };
+
+            if (GalleryAdapter.RANDOM.equals(selectedSource.getId())) {
+                ApiFactory.create(CatApi.BASE_URL, CatApi.class).getImageList(1, callBack);
+            } else {
+                ApiFactory.create(CatApi.BASE_URL, CatApi.class).getImageList(selectedCategory, 1, callBack);
             }
-        }).start();
+        } else {
+            KakaoLinker.sendImageSourceMessage(MainActivity.this, message, btnText, selectedSource, progressChangeListener);
+        }
     }
 
-    @NonNull
-    private List<ImageSource> getRandomImageSources(URL url) {
-        List<ImageSource> imageSourceList = new ArrayList<>();
+    private void hideKeyboard() {
+        View view = getCurrentFocus();
+        if (view != null) {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+    }
 
-        try {
-            DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-            Document doc = db.parse(url.openConnection().getInputStream());
+    public static class PagerAdapter extends FragmentPagerAdapter {
+        private CatCardFragment catCardFragment;
+        private FavoriteCardFragment favoriteCardFragment;
 
-            NodeList idList = doc.getElementsByTagName("id");
-            NodeList imageUrls = doc.getElementsByTagName("url");
+        public PagerAdapter(FragmentManager fm, CatCardFragment catCardFragment, FavoriteCardFragment favoriteCardFragment) {
+            super(fm);
 
-            for (int i=0; i<idList.getLength(); i++) {
-                String id = idList.item(i).getFirstChild().getNodeValue();
-                String imageUrl = imageUrls.item(i).getFirstChild().getNodeValue();
+            this.favoriteCardFragment = favoriteCardFragment;
+            this.catCardFragment = catCardFragment;
+        }
 
-                imageSourceList.add(new ImageSource(imageUrl, id));
+        public CatCardFragment getCatCardFragment() {
+            return catCardFragment;
+        }
+
+        public FavoriteCardFragment getFavoriteCardFragment() {
+            return favoriteCardFragment;
+        }
+
+        @Override
+        public void destroyItem(ViewGroup container, int position, Object object) { }
+
+        @Override
+        public Fragment getItem(int i) {
+            switch (i) {
+                case 0:
+                    return catCardFragment;
+                case 1:
+                    return favoriteCardFragment;
+                default:
+                    return null;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
 
-        return imageSourceList;
-    }
-
-    private void send(Context context, String message, String btnText, ImageSource imageSource) throws IOException {
-        try {
-            final KakaoLink kakaoLink = KakaoLink.getKakaoLink(context);
-            final KakaoTalkLinkMessageBuilder kakaoTalkLinkMessageBuilder = kakaoLink.createKakaoTalkLinkMessageBuilder();
-
-            String url = imageSource.getUrl();
-            String id = imageSource.getId();
-            Size imageSize = bitmapSizeFromUrl(url);
-
-            kakaoTalkLinkMessageBuilder.addText(message);
-            kakaoTalkLinkMessageBuilder.addImage(url, imageSize.getWidth(), imageSize.getHeight());
-            kakaoTalkLinkMessageBuilder.addWebButton(btnText, "http://thecatapi.com/api/images/get?size=mid&id=" + id);
-            kakaoTalkLinkMessageBuilder.setForwardable(true);
-
-            kakaoLink.sendMessage(kakaoTalkLinkMessageBuilder.build(), this);
-        } catch (KakaoParameterException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @NonNull
-    private Size bitmapSizeFromUrl (String imageURL){
-        try {
-            byte[] datas = getImageDataFromUrl( new URL(imageURL) );
-
-            BitmapFactory.Options opts = new BitmapFactory.Options();
-            opts.inJustDecodeBounds = true;
-            BitmapFactory.decodeByteArray(datas, 0, datas.length, opts);
-
-            int width = opts.outWidth;
-            int height = opts.outHeight;
-
-            return new Size(width, height);
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    @NonNull
-    private byte[] getImageDataFromUrl (URL url) {
-        byte[] datas = {};
-
-        try {
-            HttpURLConnection connection = (HttpURLConnection)url.openConnection();
-            connection.setDoInput(true);
-            connection.connect();
-
-            InputStream input = connection.getInputStream();
-            datas = inputStreamToByteArray(input);
-
-            input.close();
-            connection.disconnect();
-        } catch (IOException e) {
+        @Override
+        public int getCount() {
+            return 2;
         }
 
-        return datas;
-    }
-
-    @NonNull
-    private byte[] inputStreamToByteArray(InputStream is) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-
-        int nRead;
-        byte[] data = new byte[16384];
-
-        while ((nRead = is.read(data, 0, data.length)) != -1) {
-            buffer.write(data, 0, nRead);
+        @Override
+        public CharSequence getPageTitle(int position) {
+            switch(position) {
+                case 0 :
+                    return "Search";
+                case 1 :
+                    return "My";
+                default :
+                    return "";
+            }
         }
-
-        buffer.flush();
-        return buffer.toByteArray();
     }
 
 }
-

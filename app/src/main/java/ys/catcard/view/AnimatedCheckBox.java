@@ -40,10 +40,10 @@ public class AnimatedCheckBox extends View {
     private boolean isChecked;
     private boolean toggle;
     private boolean isAnim;
-    private int animDurtion = 150;
+    private int animDurtion = 50;
 
     private OnCheckedChangeListener listener;
-    private int unCheckColor = Color.GRAY;
+    private int unCheckColor = Color.WHITE;
     private int circleColor = Color.RED;
 
     public AnimatedCheckBox(Context context) {
